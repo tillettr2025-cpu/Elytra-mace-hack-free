@@ -71,7 +71,7 @@ public class ElytraMaceClient implements ClientModInitializer {
             if (active) {
                 stop(client);
             } else {
-                start(client);
+                start(client.player);
             }
         }
 
@@ -318,9 +318,8 @@ public class ElytraMaceClient implements ClientModInitializer {
                         CONFIG.targetRange
                 );
 
-        List<PlayerEntity> players =
-                client.world.getPlayers();
-
+        List<? extends PlayerEntity> players =
+        client.world.getPlayers();
         /*
          * First preference:
          * the player currently under the
