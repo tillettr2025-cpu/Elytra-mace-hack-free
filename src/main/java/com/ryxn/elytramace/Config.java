@@ -9,24 +9,123 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class Config {
-    public boolean enabled = true;
-    public boolean requireCrosshairEntity = true;
-    public boolean autoStartGliding = true;
-    public boolean autoFirework = false;
-    public int attackDelayTicks = 2;
-    public int launchDelayTicks = 8;
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("elytra-mace.json");
+    /*
+     * Main settings
+     */
+
+    public boolean enabled = true;
+
+    public boolean autoAim = true;
+
+    public boolean autoTarget = true;
+
+    public boolean requireTarget = true;
+
+    public boolean autoStartGliding = true;
+
+    public boolean autoFirework = false;
+
+    public boolean attackOnlyWhileDescending = true;
+
+    public boolean restoreSlot = true;
+
+
+    /*
+     * Target / aiming settings
+     */
+
+    public double targetRange = 32.0;
+
+    public double aimFov = 90.0;
+
+    public double aimSpeed = 1.0;
+
+    public double leadTicks = 2.0;
+
+
+    /*
+     * Timing settings
+     */
+
+    public int attackDelayTicks = 2;
+
+    public int launchDelayTicks = 4;
+
+    public int fireworkDelayTicks = 6;
+
+
+    /*
+     * Config file
+     */
+
+    private static final Gson GSON =
+            new GsonBuilder()
+                    .setPrettyPrinting()
+                    .create();
+
+    private static final Path FILE =
+            FabricLoader.getInstance()
+                    .getConfigDir()
+                    .resolve("elytra-mace.json");
+
+
+    /*
+     * Load configuration.
+     */
 
     public static Config load() {
+
         try {
-            if (Files.exists(FILE)) return GSON.fromJson(Files.readString(FILE), Config.class);
-        } catch (Exception ignored) {}
-        Config c = new Config(); c.save(); return c;
+
+            if (Files.exists(FILE)) {
+
+                Config loaded =
+                        GSON.fromJson(
+                                Files.readString(FILE),
+                                Config.class
+                        );
+
+                if (loaded != null) {
+                    return loaded;
+                }
+            }
+
+        } catch (Exception ignored) {
+        }
+
+
+        /*
+         * If no config exists,
+         * create one using defaults.
+         */
+
+        Config config = new Config();
+
+        config.save();
+
+        return config;
     }
 
+
+    /*
+     * Save configuration.
+     */
+
     public void save() {
-        try { Files.writeString(FILE, GSON.toJson(this)); } catch (IOException ignored) {}
+
+        try {
+
+            Files.createDirectories(
+                    FILE.getParent()
+            );
+
+            Files.writeString(
+                    FILE,
+                    GSON.toJson(this)
+            );
+
+        } catch (IOException ignored) {
+        }
     }
 }
