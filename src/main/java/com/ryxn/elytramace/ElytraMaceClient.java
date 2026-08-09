@@ -8,9 +8,9 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
-import net.minecraft.util.Hand;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import org.lwjgl.glfw.GLFW;
@@ -24,12 +24,22 @@ public class ElytraMaceClient implements ClientModInitializer {
     public static KeyBinding ACTIVATION_KEY;
 
     private static boolean active = false;
-    private static int attackTimer = 0;
-    private static int launchTimer = 0;
-    private static int fireworkTimer = 0;
+    private static boolean releaseReady = false;
 
-    private static int previousSlot = -1;
-    private static Entity currentTarget = null;
+    private static int fireworkTimer = 0;
+    private static int cueTimer = 0;
+
+    private static PlayerEntity currentTarget = null;
+
+    /*
+     * Used to avoid constantly changing targets.
+     */
+    private static int targetLostTicks = 0;
+
+    /*
+     * Last predicted position.
+     */
+    private static Vec3d predictedPosition = null;
 
     @Override
     public void onInitializeClient() {
@@ -59,9 +69,9 @@ public class ElytraMaceClient implements ClientModInitializer {
         while (ACTIVATION_KEY.wasPressed()) {
 
             if (active) {
-                stop(client.player);
+                stop(client);
             } else {
-                start(client.player);
+                start(client);
             }
         }
 
@@ -71,352 +81,464 @@ public class ElytraMaceClient implements ClientModInitializer {
 
         ClientPlayerEntity player = client.player;
 
-        if (attackTimer > 0) {
-            attackTimer--;
-        }
-
-        if (launchTimer > 0) {
-            launchTimer--;
-        }
-
         if (fireworkTimer > 0) {
             fireworkTimer--;
         }
 
-        int maceSlot = findMace(player);
+        if (cueTimer > 0) {
+            cueTimer--;
+        }
 
-        if (maceSlot == -1) {
-            stop(player);
+        /*
+         * ----------------------------------------
+         * TARGET SELECTION
+         * ----------------------------------------
+         *
+         * Only actual players are allowed.
+         *
+         * This prevents the camera from locking
+         * onto the floor, blocks, items, etc.
+         */
+
+        if (currentTarget == null
+                || !validTarget(player, currentTarget)) {
+
+            targetLostTicks++;
+
+            if (targetLostTicks >= 5) {
+
+                currentTarget =
+                        findPlayerTarget(client, player);
+
+                targetLostTicks = 0;
+            }
+        } else {
+            targetLostTicks = 0;
+        }
+
+        /*
+         * No target:
+         *
+         * DO NOT MOVE THE CAMERA.
+         */
+
+        if (currentTarget == null) {
+
+            predictedPosition = null;
+            releaseReady = false;
+
             return;
         }
 
         /*
-         * Automatically find a target.
+         * ----------------------------------------
+         * TARGET PREDICTION
+         * ----------------------------------------
          */
-        if (CONFIG.autoTarget
-                || currentTarget == null
-                || !validTarget(player, currentTarget)) {
 
-            currentTarget = chooseTarget(client, player);
+        predictedPosition =
+                predictTargetPosition(
+                        player,
+                        currentTarget
+                );
+
+        /*
+         * ----------------------------------------
+         * AIM ASSIST
+         * ----------------------------------------
+         */
+
+        if (CONFIG.autoAim && predictedPosition != null) {
+
+            aimAt(
+                    player,
+                    predictedPosition
+            );
         }
 
         /*
-         * No target.
+         * ----------------------------------------
+         * ELYTRA / FIREWORK ASSIST
+         * ----------------------------------------
          */
-        if (currentTarget == null) {
 
-            if (CONFIG.requireTarget) {
-                return;
-            }
-
-        } else {
-
-            /*
-             * Automatically aim at target.
-             */
-            if (CONFIG.autoAim) {
-                aimAt(player, currentTarget);
-            }
-        }
-
-        /*
-         * Elytra is already active.
-         */
         if (player.isGliding()) {
 
-            /*
-             * Optional firework.
-             */
             if (CONFIG.autoFirework
                     && fireworkTimer <= 0
                     && hasFirework(player)) {
 
                 useFirework(client);
 
-                fireworkTimer = Math.max(
-                        1,
-                        CONFIG.fireworkDelayTicks
+                fireworkTimer =
+                        Math.max(
+                                1,
+                                CONFIG.fireworkDelayTicks
+                        );
+            }
+
+            /*
+             * Determine whether we're approaching
+             * the mace impact window.
+             */
+
+            releaseReady =
+                    shouldReleaseElytra(
+                            player,
+                            currentTarget,
+                            predictedPosition
+                    );
+
+            if (releaseReady) {
+
+                /*
+                 * We do not perform the attack.
+                 *
+                 * Instead, give the player a clear
+                 * indication that the mace timing
+                 * window is ready.
+                 */
+
+                showMaceCue(client);
+
+                /*
+                 * The player can now manually:
+                 *
+                 * - release Elytra
+                 * - switch to mace
+                 * - attack
+                 */
+
+                return;
+            }
+
+            return;
+        }
+
+        /*
+         * ----------------------------------------
+         * NOT GLIDING
+         * ----------------------------------------
+         *
+         * If the player has manually left Elytra
+         * and is now falling toward the target,
+         * keep the camera pointed at the predicted
+         * impact point.
+         */
+
+        if (predictedPosition != null
+                && player.getVelocity().y < 0.0) {
+
+            if (CONFIG.autoAim) {
+
+                aimAt(
+                        player,
+                        predictedPosition
                 );
             }
-        }
 
-        /*
-         * We need to be gliding before attempting the attack.
-         */
-        if (!player.isGliding()) {
-            return;
-        }
-
-        /*
-         * No valid target.
-         */
-        if (currentTarget == null
-                || !validTarget(player, currentTarget)) {
-
-            return;
-        }
-
-        /*
-         * Attack cooldown.
-         */
-        if (attackTimer > 0) {
-            return;
-        }
-
-        /*
-         * Only attack while descending if enabled.
-         */
-        if (CONFIG.attackOnlyWhileDescending
-                && player.getVelocity().y >= -0.04) {
-
-            return;
-        }
-
-        /*
-         * Wait for vanilla attack cooldown.
-         */
-        if (player.getAttackCooldownProgress(0.0f) < 0.90f) {
-            return;
-        }
-
-        /*
-         * Switch to Mace.
-         */
-        if (player.getInventory().getSelectedSlot() != maceSlot) {
-
-            player.getInventory().setSelectedSlot(maceSlot);
-        }
-
-        /*
-         * Attack target.
-         */
-        if (client.interactionManager != null) {
-
-            client.interactionManager.attackEntity(
+            if (isInMaceWindow(
                     player,
-                    currentTarget
-            );
+                    predictedPosition
+            )) {
 
-            player.swingHand(Hand.MAIN_HAND);
-
-            attackTimer = Math.max(
-                    1,
-                    CONFIG.attackDelayTicks
-            );
+                showMaceCue(client);
+            }
         }
     }
 
-    private static void start(ClientPlayerEntity player) {
+    /*
+     * --------------------------------------------
+     * START
+     * --------------------------------------------
+     */
+
+    private static void start(
+            ClientPlayerEntity player
+    ) {
 
         active = true;
 
-        attackTimer = 0;
-        launchTimer = 0;
+        releaseReady = false;
+
         fireworkTimer = 0;
+        cueTimer = 0;
+
+        targetLostTicks = 0;
 
         currentTarget = null;
-
-        previousSlot =
-                player.getInventory().getSelectedSlot();
+        predictedPosition = null;
     }
 
-    private static void stop(ClientPlayerEntity player) {
+    /*
+     * --------------------------------------------
+     * STOP
+     * --------------------------------------------
+     */
+
+    private static void stop(
+            MinecraftClient client
+    ) {
 
         active = false;
 
-        attackTimer = 0;
-        launchTimer = 0;
+        releaseReady = false;
+
         fireworkTimer = 0;
+        cueTimer = 0;
 
         currentTarget = null;
+        predictedPosition = null;
 
-        if (CONFIG.restoreSlot && previousSlot >= 0) {
+        if (client.player != null) {
 
-            player.getInventory().setSelectedSlot(
-                    previousSlot
+            client.player.sendMessage(
+                    Text.literal(
+                            "§7Elytra Mace Assist: §cOFF"
+                    ),
+                    true
             );
         }
-
-        previousSlot = -1;
     }
 
-    private static Entity chooseTarget(
+    /*
+     * --------------------------------------------
+     * PLAYER TARGET SEARCH
+     * --------------------------------------------
+     */
+
+    private static PlayerEntity findPlayerTarget(
             MinecraftClient client,
             ClientPlayerEntity player
     ) {
 
         double range =
-                Math.max(4.0, CONFIG.targetRange);
-
-        List<Entity> candidates =
-                client.world.getOtherEntities(
-                        player,
-                        player.getBoundingBox().expand(range),
-                        entity ->
-                                entity instanceof LivingEntity
-                                        && entity.isAlive()
-                                        && !entity.isSpectator()
-                                        && entity != player
+                Math.max(
+                        4.0,
+                        CONFIG.targetRange
                 );
 
+        List<PlayerEntity> players =
+                client.world.getPlayers();
+
         /*
-         * Prefer whatever the player is already looking at.
+         * First preference:
+         * the player currently under the
+         * crosshair.
          */
+
         Entity crosshair =
                 client.targetedEntity;
 
-        if (crosshair != null
-                && candidates.contains(crosshair)
-                && angleTo(player, crosshair)
-                <= CONFIG.aimFov) {
+        if (crosshair instanceof PlayerEntity target) {
 
-            return crosshair;
+            if (target != player
+                    && validTarget(player, target)
+                    && angleTo(
+                            player,
+                            target
+                    ) <= CONFIG.aimFov) {
+
+                return target;
+            }
         }
 
         /*
-         * Otherwise choose the closest entity
-         * to the center of the player's view.
+         * Otherwise choose the closest player
+         * to the center of the camera.
          */
-        return candidates.stream()
-                .filter(entity ->
-                        angleTo(player, entity)
-                                <= CONFIG.aimFov)
-                .filter(entity ->
-                        player.squaredDistanceTo(entity)
-                                <= range * range)
+
+        return players.stream()
+
+                .filter(target ->
+                        target != player)
+
+                .filter(Entity::isAlive)
+
+                .filter(target ->
+                        !target.isSpectator())
+
+                .filter(target ->
+                        player.distanceTo(target)
+                                <= range)
+
+                .filter(target ->
+                        angleTo(
+                                player,
+                                target
+                        ) <= CONFIG.aimFov)
+
                 .min(
-                        Comparator
-                                .comparingDouble(
-                                        (Entity entity) ->
-                                                angleTo(player, entity)
-                                )
-                                .thenComparingDouble(
-                                        player::squaredDistanceTo
-                                )
+                        Comparator.comparingDouble(
+                                target ->
+                                        angleTo(
+                                                player,
+                                                target
+                                        )
+                        )
                 )
+
                 .orElse(null);
     }
 
+    /*
+     * --------------------------------------------
+     * TARGET VALIDATION
+     * --------------------------------------------
+     */
+
     private static boolean validTarget(
             ClientPlayerEntity player,
-            Entity target
+            PlayerEntity target
     ) {
 
-        return target != null
-                && target.isAlive()
-                && !target.isRemoved()
-                && target != player
-                && player.distanceTo(target)
+        if (target == null) {
+            return false;
+        }
+
+        if (target == player) {
+            return false;
+        }
+
+        if (!target.isAlive()) {
+            return false;
+        }
+
+        if (target.isSpectator()) {
+            return false;
+        }
+
+        return player.distanceTo(target)
                 <= CONFIG.targetRange;
     }
 
-    private static double angleTo(
+    /*
+     * --------------------------------------------
+     * TARGET PREDICTION
+     * --------------------------------------------
+     *
+     * This intentionally uses the target's current
+     * velocity.
+     *
+     * That helps when the target is:
+     *
+     * - moving sideways
+     * - jumping
+     * - falling
+     * - knocked upward
+     * - affected by Wind Burst
+     */
+
+    private static Vec3d predictTargetPosition(
             ClientPlayerEntity player,
-            Entity target
+            PlayerEntity target
     ) {
 
-        Vec3d targetPosition =
-                target.getPos()
-                        .add(
-                                target.getVelocity()
-                                        .multiply(CONFIG.leadTicks)
-                        )
-                        .add(
-                                0.0,
-                                target.getHeight() * 0.55,
-                                0.0
-                        );
+        Vec3d targetPos =
+                target.getPos();
 
-        Vec3d eye =
-                player.getEyePos();
+        Vec3d velocity =
+                target.getVelocity();
 
-        double dx =
-                targetPosition.x - eye.x;
+        double distance =
+                player.distanceTo(target);
 
-        double dy =
-                targetPosition.y - eye.y;
+        /*
+         * Estimate time to impact.
+         *
+         * Faster movement means a shorter
+         * prediction interval.
+         */
 
-        double dz =
-                targetPosition.z - eye.z;
+        double playerSpeed =
+                player.getVelocity().length();
 
-        double horizontal =
-                Math.sqrt(
-                        dx * dx + dz * dz
+        double estimatedSpeed =
+                Math.max(
+                        0.35,
+                        playerSpeed
+                                + velocity.length()
                 );
 
-        float targetYaw =
-                (float) (
-                        Math.toDegrees(
-                                Math.atan2(dz, dx)
-                        ) - 90.0
-                );
+        double time =
+                distance
+                        / estimatedSpeed;
 
-        float targetPitch =
-                (float) (
-                        -Math.toDegrees(
-                                Math.atan2(
-                                        dy,
-                                        horizontal
-                                )
-                        )
-                );
+        /*
+         * Clamp prediction so it doesn't
+         * wildly overshoot after knockback.
+         */
 
-        float yawDifference =
-                Math.abs(
-                        MathHelper.wrapDegrees(
-                                targetYaw - player.getYaw()
+        time =
+                MathHelper.clamp(
+                        time,
+                        0.05,
+                        Math.max(
+                                0.1,
+                                CONFIG.leadTicks
                         )
                 );
 
-        float pitchDifference =
-                Math.abs(
-                        targetPitch - player.getPitch()
+        /*
+         * Predict target movement.
+         */
+
+        Vec3d predicted =
+                targetPos.add(
+                        velocity.multiply(time)
                 );
 
-        return Math.sqrt(
-                yawDifference * yawDifference
-                        + pitchDifference * pitchDifference
-        );
+        /*
+         * Aim around the player's upper body.
+         */
+
+        predicted =
+                predicted.add(
+                        0.0,
+                        target.getHeight()
+                                * 0.55,
+                        0.0
+                );
+
+        return predicted;
     }
+
+    /*
+     * --------------------------------------------
+     * AIM
+     * --------------------------------------------
+     */
 
     private static void aimAt(
             ClientPlayerEntity player,
-            Entity target
+            Vec3d target
     ) {
-
-        Vec3d targetPosition =
-                target.getPos()
-                        .add(
-                                target.getVelocity()
-                                        .multiply(CONFIG.leadTicks)
-                        )
-                        .add(
-                                0.0,
-                                target.getHeight() * 0.55,
-                                0.0
-                        );
 
         Vec3d eye =
                 player.getEyePos();
 
         double dx =
-                targetPosition.x - eye.x;
+                target.x - eye.x;
 
         double dy =
-                targetPosition.y - eye.y;
+                target.y - eye.y;
 
         double dz =
-                targetPosition.z - eye.z;
+                target.z - eye.z;
 
         double horizontal =
                 Math.sqrt(
-                        dx * dx + dz * dz
+                        dx * dx
+                                + dz * dz
                 );
 
         float wantedYaw =
                 (float) (
                         Math.toDegrees(
-                                Math.atan2(dz, dx)
+                                Math.atan2(
+                                        dz,
+                                        dx
+                                )
                         ) - 90.0
                 );
 
@@ -437,12 +559,15 @@ public class ElytraMaceClient implements ClientModInitializer {
                         1.0
                 );
 
+        float yawDifference =
+                MathHelper.wrapDegrees(
+                        wantedYaw
+                                - player.getYaw()
+                );
+
         float yaw =
                 player.getYaw()
-                        + MathHelper.wrapDegrees(
-                                wantedYaw
-                                        - player.getYaw()
-                        ) * speed;
+                        + yawDifference * speed;
 
         float pitch =
                 player.getPitch()
@@ -462,22 +587,167 @@ public class ElytraMaceClient implements ClientModInitializer {
         );
     }
 
-    private static int findMace(
-            ClientPlayerEntity player
+    /*
+     * --------------------------------------------
+     * RELEASE DETECTION
+     * --------------------------------------------
+     */
+
+    private static boolean shouldReleaseElytra(
+            ClientPlayerEntity player,
+            PlayerEntity target,
+            Vec3d predicted
     ) {
 
-        for (int slot = 0; slot < 9; slot++) {
-
-            if (player.getInventory()
-                    .getStack(slot)
-                    .isOf(Items.MACE)) {
-
-                return slot;
-            }
+        if (predicted == null) {
+            return false;
         }
 
-        return -1;
+        double distance =
+                player.getPos()
+                        .distanceTo(predicted);
+
+        /*
+         * Don't release too early.
+         */
+
+        if (distance > 10.0) {
+            return false;
+        }
+
+        /*
+         * Require downward movement.
+         */
+
+        if (player.getVelocity().y >= 0.0) {
+            return false;
+        }
+
+        /*
+         * Check whether the target is roughly
+         * in front of us.
+         */
+
+        return angleTo(
+                player,
+                target
+        ) <= Math.max(
+                25.0,
+                CONFIG.aimFov
+        );
     }
+
+    /*
+     * --------------------------------------------
+     * MACE WINDOW
+     * --------------------------------------------
+     */
+
+    private static boolean isInMaceWindow(
+            ClientPlayerEntity player,
+            Vec3d predicted
+    ) {
+
+        if (predicted == null) {
+            return false;
+        }
+
+        double distance =
+                player.getPos()
+                        .distanceTo(predicted);
+
+        /*
+         * Close enough for the manual
+         * mace timing window.
+         */
+
+        return distance <= 5.5
+                && player.getVelocity().y < -0.08;
+    }
+
+    /*
+     * --------------------------------------------
+     * ANGLE TO TARGET
+     * --------------------------------------------
+     */
+
+    private static double angleTo(
+            ClientPlayerEntity player,
+            Entity target
+    ) {
+
+        Vec3d targetPos =
+                target.getPos()
+                        .add(
+                                0.0,
+                                target.getHeight()
+                                        * 0.55,
+                                0.0
+                        );
+
+        Vec3d eye =
+                player.getEyePos();
+
+        double dx =
+                targetPos.x - eye.x;
+
+        double dy =
+                targetPos.y - eye.y;
+
+        double dz =
+                targetPos.z - eye.z;
+
+        double horizontal =
+                Math.sqrt(
+                        dx * dx
+                                + dz * dz
+                );
+
+        float targetYaw =
+                (float) (
+                        Math.toDegrees(
+                                Math.atan2(
+                                        dz,
+                                        dx
+                                )
+                        ) - 90.0
+                );
+
+        float targetPitch =
+                (float) (
+                        -Math.toDegrees(
+                                Math.atan2(
+                                        dy,
+                                        horizontal
+                                )
+                        )
+                );
+
+        float yawDifference =
+                Math.abs(
+                        MathHelper.wrapDegrees(
+                                targetYaw
+                                        - player.getYaw()
+                        )
+                );
+
+        float pitchDifference =
+                Math.abs(
+                        targetPitch
+                                - player.getPitch()
+                );
+
+        return Math.sqrt(
+                yawDifference * yawDifference
+                        + pitchDifference * pitchDifference
+        );
+    }
+
+    /*
+     * --------------------------------------------
+     * FIREWORK
+     * --------------------------------------------
+     */
 
     private static boolean hasFirework(
             ClientPlayerEntity player
@@ -487,7 +757,9 @@ public class ElytraMaceClient implements ClientModInitializer {
 
             if (player.getInventory()
                     .getStack(slot)
-                    .isOf(Items.FIREWORK_ROCKET)) {
+                    .isOf(
+                            Items.FIREWORK_ROCKET
+                    )) {
 
                 return true;
             }
@@ -515,17 +787,20 @@ public class ElytraMaceClient implements ClientModInitializer {
 
             if (player.getInventory()
                     .getStack(slot)
-                    .isOf(Items.FIREWORK_ROCKET)) {
+                    .isOf(
+                            Items.FIREWORK_ROCKET
+                    )) {
 
                 player.getInventory()
                         .setSelectedSlot(slot);
 
                 if (client.interactionManager != null) {
 
-                    client.interactionManager.interactItem(
-                            player,
-                            Hand.MAIN_HAND
-                    );
+                    client.interactionManager
+                            .interactItem(
+                                    player,
+                                    net.minecraft.util.Hand.MAIN_HAND
+                            );
                 }
 
                 player.getInventory()
@@ -533,6 +808,33 @@ public class ElytraMaceClient implements ClientModInitializer {
 
                 return;
             }
+        }
+    }
+
+    /*
+     * --------------------------------------------
+     * MACE CUE
+     * --------------------------------------------
+     */
+
+    private static void showMaceCue(
+            MinecraftClient client
+    ) {
+
+        if (cueTimer > 0) {
+            return;
+        }
+
+        cueTimer = 8;
+
+        if (client.player != null) {
+
+            client.player.sendMessage(
+                    Text.literal(
+                            "§c§lMACE NOW!"
+                    ),
+                    true
+            );
         }
     }
 }
