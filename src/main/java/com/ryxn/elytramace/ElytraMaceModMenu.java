@@ -8,51 +8,449 @@ import net.minecraft.client.gui.widget.CyclingButtonWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.text.Text;
 
+import java.util.function.DoubleConsumer;
+import java.util.function.IntConsumer;
+
 public class ElytraMaceModMenu implements ModMenuApi {
-    @Override public ConfigScreenFactory<?> getModConfigScreenFactory() {
-        return parent -> new ConfigScreen(parent);
+
+    @Override
+    public ConfigScreenFactory<?> getModConfigScreenFactory() {
+        return ConfigScreen::new;
     }
 
     private static class ConfigScreen extends Screen {
+
         private final Screen parent;
-        ConfigScreen(Screen parent) { super(Text.literal("Elytra Mace Settings")); this.parent = parent; }
 
-        @Override protected void init() {
-            int cx = width / 2;
-            int y = 45;
-            addDrawableChild(CyclingButtonWidget.onOffBuilder()
-                    .initiallyChecked(ElytraMaceClient.CONFIG.enabled)
-                    .build(cx - 100, y, 200, 20, Text.literal("Enabled"), (b, v) -> ElytraMaceClient.CONFIG.enabled = v));
-            y += 28;
-            addDrawableChild(CyclingButtonWidget.onOffBuilder()
-                    .initiallyChecked(ElytraMaceClient.CONFIG.requireCrosshairEntity)
-                    .build(cx - 100, y, 200, 20, Text.literal("Require target"), (b, v) -> ElytraMaceClient.CONFIG.requireCrosshairEntity = v));
-            y += 28;
-            addDrawableChild(CyclingButtonWidget.onOffBuilder()
-                    .initiallyChecked(ElytraMaceClient.CONFIG.autoStartGliding)
-                    .build(cx - 100, y, 200, 20, Text.literal("Auto glide assist"), (b, v) -> ElytraMaceClient.CONFIG.autoStartGliding = v));
-            y += 28;
-            addDrawableChild(CyclingButtonWidget.onOffBuilder()
-                    .initiallyChecked(ElytraMaceClient.CONFIG.autoFirework)
-                    .build(cx - 100, y, 200, 20, Text.literal("Auto fireworks"), (b, v) -> ElytraMaceClient.CONFIG.autoFirework = v));
-            y += 35;
-            addDrawableChild(new IntSlider(cx - 100, y, "Attack delay", 1, 10, ElytraMaceClient.CONFIG.attackDelayTicks,
-                    v -> ElytraMaceClient.CONFIG.attackDelayTicks = v));
-            y += 28;
-            addDrawableChild(new IntSlider(cx - 100, y, "Launch delay", 0, 30, ElytraMaceClient.CONFIG.launchDelayTicks,
-                    v -> ElytraMaceClient.CONFIG.launchDelayTicks = v));
-            addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close()).dimensions(cx - 100, height - 35, 200, 20).build());
+        protected ConfigScreen(Screen parent) {
+
+            super(
+                    Text.literal(
+                            "Elytra Mace Settings"
+                    )
+            );
+
+            this.parent = parent;
         }
-        private void close() { ElytraMaceClient.CONFIG.save(); client.setScreen(parent); }
-        @Override public void close() { ElytraMaceClient.CONFIG.save(); client.setScreen(parent); }
 
-        private static class IntSlider extends SliderWidget {
-            private final String label; private final int min, max; private final java.util.function.IntConsumer setter;
-            IntSlider(int x,int y,String label,int min,int max,int value,java.util.function.IntConsumer setter) {
-                super(x,y,200,20,Text.empty(),(value-min)/(double)(max-min)); this.label=label;this.min=min;this.max=max;this.setter=setter; updateMessage(); }
-            @Override protected void updateMessage() { setMessage(Text.literal(label + ": " + Math.round(value*(max-min)+min))); }
-            @Override protected void applyValue() { setter.accept((int)Math.round(value*(max-min)+min)); updateMessage(); }
+        @Override
+        protected void init() {
+
+            int centerX =
+                    width / 2;
+
+            int y = 35;
+
+            /*
+             * Boolean settings.
+             */
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Enabled",
+                            ElytraMaceClient.CONFIG.enabled,
+                            value ->
+                                    ElytraMaceClient.CONFIG.enabled =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Auto Aim",
+                            ElytraMaceClient.CONFIG.autoAim,
+                            value ->
+                                    ElytraMaceClient.CONFIG.autoAim =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Auto Target",
+                            ElytraMaceClient.CONFIG.autoTarget,
+                            value ->
+                                    ElytraMaceClient.CONFIG.autoTarget =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Require Target",
+                            ElytraMaceClient.CONFIG.requireTarget,
+                            value ->
+                                    ElytraMaceClient.CONFIG.requireTarget =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Auto Start Elytra",
+                            ElytraMaceClient.CONFIG.autoStartGliding,
+                            value ->
+                                    ElytraMaceClient.CONFIG.autoStartGliding =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Auto Firework",
+                            ElytraMaceClient.CONFIG.autoFirework,
+                            value ->
+                                    ElytraMaceClient.CONFIG.autoFirework =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Descending Only",
+                            ElytraMaceClient.CONFIG.attackOnlyWhileDescending,
+                            value ->
+                                    ElytraMaceClient.CONFIG.attackOnlyWhileDescending =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    toggle(
+                            centerX,
+                            y,
+                            "Restore Hotbar Slot",
+                            ElytraMaceClient.CONFIG.restoreSlot,
+                            value ->
+                                    ElytraMaceClient.CONFIG.restoreSlot =
+                                            value
+                    )
+            );
+
+            y += 30;
+
+            /*
+             * Number settings.
+             */
+
+            addDrawableChild(
+                    new DoubleSlider(
+                            centerX - 100,
+                            y,
+                            "Target Range",
+                            4.0,
+                            64.0,
+                            ElytraMaceClient.CONFIG.targetRange,
+                            value ->
+                                    ElytraMaceClient.CONFIG.targetRange =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    new DoubleSlider(
+                            centerX - 100,
+                            y,
+                            "Aim FOV",
+                            5.0,
+                            180.0,
+                            ElytraMaceClient.CONFIG.aimFov,
+                            value ->
+                                    ElytraMaceClient.CONFIG.aimFov =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    new DoubleSlider(
+                            centerX - 100,
+                            y,
+                            "Aim Speed",
+                            0.05,
+                            1.0,
+                            ElytraMaceClient.CONFIG.aimSpeed,
+                            value ->
+                                    ElytraMaceClient.CONFIG.aimSpeed =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    new DoubleSlider(
+                            centerX - 100,
+                            y,
+                            "Target Lead",
+                            0.0,
+                            8.0,
+                            ElytraMaceClient.CONFIG.leadTicks,
+                            value ->
+                                    ElytraMaceClient.CONFIG.leadTicks =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    new IntSlider(
+                            centerX - 100,
+                            y,
+                            "Attack Delay",
+                            1,
+                            10,
+                            ElytraMaceClient.CONFIG.attackDelayTicks,
+                            value ->
+                                    ElytraMaceClient.CONFIG.attackDelayTicks =
+                                            value
+                    )
+            );
+
+            y += 25;
+
+            addDrawableChild(
+                    new IntSlider(
+                            centerX - 100,
+                            y,
+                            "Firework Delay",
+                            1,
+                            20,
+                            ElytraMaceClient.CONFIG.fireworkDelayTicks,
+                            value ->
+                                    ElytraMaceClient.CONFIG.fireworkDelayTicks =
+                                            value
+                    )
+            );
+
+            /*
+             * Done button.
+             */
+
+            addDrawableChild(
+                    ButtonWidget.builder(
+                            Text.literal("Done"),
+                            button -> close()
+                    ).dimensions(
+                            centerX - 100,
+                            height - 30,
+                            200,
+                            20
+                    ).build()
+            );
+        }
+
+        private static ButtonWidget toggle(
+                int centerX,
+                int y,
+                String name,
+                boolean value,
+                java.util.function.Consumer<Boolean> setter
+        ) {
+
+            return CyclingButtonWidget
+                    .onOffBuilder(value)
+                    .build(
+                            centerX - 100,
+                            y,
+                            200,
+                            20,
+                            Text.literal(name),
+                            (button, newValue) ->
+                                    setter.accept(newValue)
+                    );
+        }
+
+        /*
+         * Save settings and return to the previous screen.
+         *
+         * There is intentionally only ONE close()
+         * method in this class.
+         */
+
+        @Override
+        public void close() {
+
+            ElytraMaceClient.CONFIG.save();
+
+            if (client != null) {
+                client.setScreen(parent);
+            }
+        }
+
+        /*
+         * Integer slider.
+         */
+
+        private static class IntSlider
+                extends SliderWidget {
+
+            private final String label;
+            private final int min;
+            private final int max;
+            private final IntConsumer setter;
+
+            IntSlider(
+                    int x,
+                    int y,
+                    String label,
+                    int min,
+                    int max,
+                    int current,
+                    IntConsumer setter
+            ) {
+
+                super(
+                        x,
+                        y,
+                        200,
+                        20,
+                        Text.empty(),
+                        (current - min)
+                                / (double) (max - min)
+                );
+
+                this.label = label;
+                this.min = min;
+                this.max = max;
+                this.setter = setter;
+
+                updateMessage();
+            }
+
+            @Override
+            protected void updateMessage() {
+
+                int current =
+                        (int) Math.round(
+                                value * (max - min)
+                                        + min
+                        );
+
+                setMessage(
+                        Text.literal(
+                                label + ": " + current
+                        )
+                );
+            }
+
+            @Override
+            protected void applyValue() {
+
+                int current =
+                        (int) Math.round(
+                                value * (max - min)
+                                        + min
+                        );
+
+                setter.accept(current);
+
+                updateMessage();
+            }
+        }
+
+        /*
+         * Double slider.
+         */
+
+        private static class DoubleSlider
+                extends SliderWidget {
+
+            private final String label;
+            private final double min;
+            private final double max;
+            private final DoubleConsumer setter;
+
+            DoubleSlider(
+                    int x,
+                    int y,
+                    String label,
+                    double min,
+                    double max,
+                    double current,
+                    DoubleConsumer setter
+            ) {
+
+                super(
+                        x,
+                        y,
+                        200,
+                        20,
+                        Text.empty(),
+                        (current - min)
+                                / (max - min)
+                );
+
+                this.label = label;
+                this.min = min;
+                this.max = max;
+                this.setter = setter;
+
+                updateMessage();
+            }
+
+            @Override
+            protected void updateMessage() {
+
+                double current =
+                        value * (max - min)
+                                + min;
+
+                setMessage(
+                        Text.literal(
+                                label
+                                        + ": "
+                                        + String.format(
+                                                "%.2f",
+                                                current
+                                        )
+                        )
+                );
+            }
+
+            @Override
+            protected void applyValue() {
+
+                double current =
+                        value * (max - min)
+                                + min;
+
+                setter.accept(current);
+
+                updateMessage();
+            }
         }
     }
-  }
-              
+}
