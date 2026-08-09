@@ -8,6 +8,7 @@ import net.minecraft.client.gui.widget.CyclingButtonWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.text.Text;
 
+import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 import java.util.function.IntConsumer;
 
@@ -23,26 +24,20 @@ public class ElytraMaceModMenu implements ModMenuApi {
         private final Screen parent;
 
         protected ConfigScreen(Screen parent) {
-
-            super(
-                    Text.literal(
-                            "Elytra Mace Settings"
-                    )
-            );
-
+            super(Text.literal("Elytra Mace Settings"));
             this.parent = parent;
         }
 
         @Override
         protected void init() {
 
-            int centerX =
-                    width / 2;
-
+            int centerX = width / 2;
             int y = 35;
 
             /*
-             * Boolean settings.
+             * =========================
+             * TOGGLES
+             * =========================
              */
 
             addDrawableChild(
@@ -51,9 +46,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Enabled",
                             ElytraMaceClient.CONFIG.enabled,
-                            value ->
-                                    ElytraMaceClient.CONFIG.enabled =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.enabled = value
                     )
             );
 
@@ -65,9 +58,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Auto Aim",
                             ElytraMaceClient.CONFIG.autoAim,
-                            value ->
-                                    ElytraMaceClient.CONFIG.autoAim =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.autoAim = value
                     )
             );
 
@@ -79,9 +70,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Auto Target",
                             ElytraMaceClient.CONFIG.autoTarget,
-                            value ->
-                                    ElytraMaceClient.CONFIG.autoTarget =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.autoTarget = value
                     )
             );
 
@@ -93,9 +82,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Require Target",
                             ElytraMaceClient.CONFIG.requireTarget,
-                            value ->
-                                    ElytraMaceClient.CONFIG.requireTarget =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.requireTarget = value
                     )
             );
 
@@ -107,9 +94,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Auto Start Elytra",
                             ElytraMaceClient.CONFIG.autoStartGliding,
-                            value ->
-                                    ElytraMaceClient.CONFIG.autoStartGliding =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.autoStartGliding = value
                     )
             );
 
@@ -121,9 +106,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Auto Firework",
                             ElytraMaceClient.CONFIG.autoFirework,
-                            value ->
-                                    ElytraMaceClient.CONFIG.autoFirework =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.autoFirework = value
                     )
             );
 
@@ -135,9 +118,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Descending Only",
                             ElytraMaceClient.CONFIG.attackOnlyWhileDescending,
-                            value ->
-                                    ElytraMaceClient.CONFIG.attackOnlyWhileDescending =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.attackOnlyWhileDescending = value
                     )
             );
 
@@ -149,16 +130,16 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             y,
                             "Restore Hotbar Slot",
                             ElytraMaceClient.CONFIG.restoreSlot,
-                            value ->
-                                    ElytraMaceClient.CONFIG.restoreSlot =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.restoreSlot = value
                     )
             );
 
             y += 30;
 
             /*
-             * Number settings.
+             * =========================
+             * TARGET RANGE
+             * =========================
              */
 
             addDrawableChild(
@@ -169,13 +150,17 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             4.0,
                             64.0,
                             ElytraMaceClient.CONFIG.targetRange,
-                            value ->
-                                    ElytraMaceClient.CONFIG.targetRange =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.targetRange = value
                     )
             );
 
             y += 25;
+
+            /*
+             * =========================
+             * AIM FOV
+             * =========================
+             */
 
             addDrawableChild(
                     new DoubleSlider(
@@ -185,13 +170,17 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             5.0,
                             180.0,
                             ElytraMaceClient.CONFIG.aimFov,
-                            value ->
-                                    ElytraMaceClient.CONFIG.aimFov =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.aimFov = value
                     )
             );
 
             y += 25;
+
+            /*
+             * =========================
+             * AIM SPEED
+             * =========================
+             */
 
             addDrawableChild(
                     new DoubleSlider(
@@ -201,13 +190,17 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             0.05,
                             1.0,
                             ElytraMaceClient.CONFIG.aimSpeed,
-                            value ->
-                                    ElytraMaceClient.CONFIG.aimSpeed =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.aimSpeed = value
                     )
             );
 
             y += 25;
+
+            /*
+             * =========================
+             * TARGET LEAD
+             * =========================
+             */
 
             addDrawableChild(
                     new DoubleSlider(
@@ -217,13 +210,17 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             0.0,
                             8.0,
                             ElytraMaceClient.CONFIG.leadTicks,
-                            value ->
-                                    ElytraMaceClient.CONFIG.leadTicks =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.leadTicks = value
                     )
             );
 
             y += 25;
+
+            /*
+             * =========================
+             * ATTACK DELAY
+             * =========================
+             */
 
             addDrawableChild(
                     new IntSlider(
@@ -233,13 +230,17 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             1,
                             10,
                             ElytraMaceClient.CONFIG.attackDelayTicks,
-                            value ->
-                                    ElytraMaceClient.CONFIG.attackDelayTicks =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.attackDelayTicks = value
                     )
             );
 
             y += 25;
+
+            /*
+             * =========================
+             * FIREWORK DELAY
+             * =========================
+             */
 
             addDrawableChild(
                     new IntSlider(
@@ -249,35 +250,47 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             1,
                             20,
                             ElytraMaceClient.CONFIG.fireworkDelayTicks,
-                            value ->
-                                    ElytraMaceClient.CONFIG.fireworkDelayTicks =
-                                            value
+                            value -> ElytraMaceClient.CONFIG.fireworkDelayTicks = value
                     )
             );
 
             /*
-             * Done button.
+             * =========================
+             * DONE BUTTON
+             * =========================
              */
 
             addDrawableChild(
                     ButtonWidget.builder(
                             Text.literal("Done"),
                             button -> close()
-                    ).dimensions(
-                            centerX - 100,
-                            height - 30,
-                            200,
-                            20
-                    ).build()
+                    )
+                            .dimensions(
+                                    centerX - 100,
+                                    height - 30,
+                                    200,
+                                    20
+                            )
+                            .build()
             );
         }
 
-        private static ButtonWidget toggle(
+        /*
+         * =========================
+         * TOGGLE CREATOR
+         * =========================
+         *
+         * IMPORTANT:
+         * This returns CyclingButtonWidget<Boolean>,
+         * NOT ButtonWidget.
+         */
+
+        private static CyclingButtonWidget<Boolean> toggle(
                 int centerX,
                 int y,
                 String name,
                 boolean value,
-                java.util.function.Consumer<Boolean> setter
+                Consumer<Boolean> setter
         ) {
 
             return CyclingButtonWidget
@@ -288,16 +301,14 @@ public class ElytraMaceModMenu implements ModMenuApi {
                             200,
                             20,
                             Text.literal(name),
-                            (button, newValue) ->
-                                    setter.accept(newValue)
+                            (button, newValue) -> setter.accept(newValue)
                     );
         }
 
         /*
-         * Save settings and return to the previous screen.
-         *
-         * There is intentionally only ONE close()
-         * method in this class.
+         * =========================
+         * CLOSE
+         * =========================
          */
 
         @Override
@@ -311,11 +322,12 @@ public class ElytraMaceModMenu implements ModMenuApi {
         }
 
         /*
-         * Integer slider.
+         * =========================
+         * INTEGER SLIDER
+         * =========================
          */
 
-        private static class IntSlider
-                extends SliderWidget {
+        private static class IntSlider extends SliderWidget {
 
             private final String label;
             private final int min;
@@ -355,8 +367,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
 
                 int current =
                         (int) Math.round(
-                                value * (max - min)
-                                        + min
+                                value * (max - min) + min
                         );
 
                 setMessage(
@@ -371,8 +382,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
 
                 int current =
                         (int) Math.round(
-                                value * (max - min)
-                                        + min
+                                value * (max - min) + min
                         );
 
                 setter.accept(current);
@@ -382,11 +392,12 @@ public class ElytraMaceModMenu implements ModMenuApi {
         }
 
         /*
-         * Double slider.
+         * =========================
+         * DOUBLE SLIDER
+         * =========================
          */
 
-        private static class DoubleSlider
-                extends SliderWidget {
+        private static class DoubleSlider extends SliderWidget {
 
             private final String label;
             private final double min;
@@ -425,8 +436,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
             protected void updateMessage() {
 
                 double current =
-                        value * (max - min)
-                                + min;
+                        value * (max - min) + min;
 
                 setMessage(
                         Text.literal(
@@ -444,8 +454,7 @@ public class ElytraMaceModMenu implements ModMenuApi {
             protected void applyValue() {
 
                 double current =
-                        value * (max - min)
-                                + min;
+                        value * (max - min) + min;
 
                 setter.accept(current);
 
